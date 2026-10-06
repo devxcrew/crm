@@ -1,0 +1,102 @@
+name: ${CLIENT_COMPOSE_PROJECT:-techmedia}
+
+services:
+  mariadb:
+    image: mariadb:11.8
+    container_name: ${CLIENT_DB_CONTAINER:-techmedia-mariadb}
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+      MARIADB_DATABASE: ${CLIENT_DB_NAME:?CLIENT_DB_NAME is required}
+      MARIADB_USER: ${CLIENT_DB_USER:?CLIENT_DB_USER is required}
+      MARIADB_PASSWORD: ${CLIENT_DB_PASSWORD:?CLIENT_DB_PASSWORD is required}
+      MARIADB_ROOT_PASSWORD: ${CLIENT_DB_ROOT_PASSWORD:?CLIENT_DB_ROOT_PASSWORD is required}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    networks: [client]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+
+  api:
+    build:
+      context: ../..
+      dockerfile: .container/techmedia/Dockerfile
+      target: api-runtime
+      args:
+        APP_BRAND_NAME: ${APP_BRAND_NAME:?APP_BRAND_NAME is required}
+        APP_BRAND_TAGLINE: ${APP_BRAND_TAGLINE:?APP_BRAND_TAGLINE is required}
+        VITE_PLATFORM_API_URL: ${VITE_PLATFORM_API_URL:-/api/platform}
+    image: ${CLIENT_IMAGE_REGISTRY:-techmedia}/api:${CLIENT_IMAGE_TAG:-local}
+    container_name: ${CLIENT_API_CONTAINER:-techmedia-api}
+    restart: unless-stopped
+    env_file: [./.env]
+    environment:
+      NODE_ENV: production
+      DB_DRIVER: mariadb
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: ${CLIENT_DB_NAME:?CLIENT_DB_NAME is required}
+      DB_USER: ${CLIENT_DB_USER:?CLIENT_DB_USER is required}
+      DB_PASSWORD: ${CLIENT_DB_PASSWORD:?CLIENT_DB_PASSWORD is required}
+      MOBILE_RELEASE_STORAGE_ROOT: /workspace/techmedia/storage/mobile/release
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "${CLIENT_BIND_ADDRESS:-127.0.0.1}:${CLIENT_API_HOST_PORT:-7050}:7050"
+    volumes:
+      - ./.env:/workspace/techmedia/.env:rw
+      - codex-data:/home/node/.codex
+      - mobile-releases:/workspace/techmedia/storage/mobile/release
+    networks: [client]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7050/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 18
+
+  web:
+    build:
+      context: ../..
+      dockerfile: .container/techmedia/Dockerfile
+      target: web-runtime
+      args:
+        APP_BRAND_NAME: ${APP_BRAND_NAME:?APP_BRAND_NAME is required}
+        APP_BRAND_TAGLINE: ${APP_BRAND_TAGLINE:?APP_BRAND_TAGLINE is required}
+        VITE_PLATFORM_API_URL: ${VITE_PLATFORM_API_URL:-/api/platform}
+    image: ${CLIENT_IMAGE_REGISTRY:-techmedia}/web:${CLIENT_IMAGE_TAG:-local}
+    container_name: ${CLIENT_WEB_CONTAINER:-techmedia-web}
+    restart: unless-stopped
+    environment:
+      NGINX_ENVSUBST_FILTER: TECHMEDIA_API
+      TECHMEDIA_API_CONTAINER_NAME: ${CLIENT_API_CONTAINER:-techmedia-api}
+      TECHMEDIA_API_INTERNAL_PORT: 7050
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${CLIENT_BIND_ADDRESS:-127.0.0.1}:${CLIENT_WEB_HOST_PORT:-7060}:80"
+    networks: [client]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 12
+
+volumes:
+  mariadb-data:
+    name: ${CLIENT_DB_VOLUME:-techmedia-mariadb-data}
+  codex-data:
+    name: ${CLIENT_CODEX_VOLUME:-techmedia-codex-data}
+  mobile-releases:
+    name: ${CLIENT_MOBILE_RELEASE_VOLUME:-techmedia-mobile-releases}
+
+networks:
+  client:
+    name: ${CLIENT_NETWORK:-techmedia-network}

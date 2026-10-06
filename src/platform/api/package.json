@@ -1,0 +1,28 @@
+{
+  "name": "@techmedia/platform-api",
+  "version": "1.0.119",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --ext .ts",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
+    "@codexsun/framework": "1.0.119",
+    "@fastify/multipart": "^10.1.1",
+    "@fastify/websocket": "^11.3.0",
+    "@openai/codex": "^0.149.1",
+    "fastify": "^5.12.1",
+    "firebase-admin": "^14.3.0",
+    "kysely": "^0.29.5",
+    "mysql2": "^3.24.0",
+    "ws": "^8.21.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
+  }
+}
